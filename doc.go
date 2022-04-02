@@ -1,5 +1,4 @@
-// Package zt provides a Reader that transparently decodes a input stream of
-// compressed bytes, without specifying the compression algorithm. If the stream
-// is not compressed, or compressed with an unknown algorithm, the input stream
-// is forwarded as-is.
+// Package zt provides a Reader that help to transparently handle an incomping
+// bytes stream, whether it's compressed (by decompressing it on the fly), or
+// uncompressed, in which case it's forwarded as-i.
 package zt
