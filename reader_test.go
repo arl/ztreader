@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/iotest"
 )
 
 var (
@@ -27,6 +28,7 @@ func testReader(r io.Reader) func(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Reader returns %v", err)
 		}
+
 		got, err := io.ReadAll(r)
 		if err != nil {
 			t.Fatalf("couldn't read all: %v", err)
@@ -57,6 +59,8 @@ func testReaders(newReader func([]byte) io.Reader) func(t *testing.T) {
 
 func TestReader(t *testing.T) {
 	t.Run("bytes", testReaders(func(buf []byte) io.Reader { return bytes.NewReader(buf) }))
+	t.Run("halfreader", testReaders(func(buf []byte) io.Reader { return iotest.HalfReader(bytes.NewReader(buf)) }))
+	t.Run("onebyteReader", testReaders(func(buf []byte) io.Reader { return iotest.OneByteReader(bytes.NewReader(buf)) }))
 }
 
 func TestReader1Byte(t *testing.T) {

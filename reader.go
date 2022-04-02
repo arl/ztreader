@@ -15,36 +15,38 @@ const (
 	zstdHeader = "\x28\xb5\x2f\xfd"
 )
 
-// NewReader returns an io.ReadCloser that reads from r, whether r is a reader
-// over compressed data or not. The returned Reader decodes compressed data
-// (currently supporting gzip and zst), or fowards data as-is if it's not
-// compressed, or compressed using a non supported algorithm.
+// NewReader returns an io.ReadCloser that reads from r, either decoding the
+// compressed stream (in case the algorithm used to compress it is both
+// supported and detected), or just forwarding it.
 //
-// Note: NewReader is an utility provided as a best effort, it's certainly
-// possible to trick it, intentionally or not, into thinking a stream of bytes
-// contains zstd or gzip compressed data, while in fact it's not.
+// In order for NewReader to succeeds, at least 4 bytes must be read from r, in
+// order to detect the presence of a compression algorithm and its type.
+//
+// Note: this utility provided as a best effort, it's certainly possible to
+// trick it into thinking a stream of bytes contains zstd or gzip compressed
+// data, while in fact it's not.
 func NewReader(r io.Reader) (io.ReadCloser, error) {
-	var hdr [4]byte
-	n, err := r.Read(hdr[:])
+	buf := make([]byte, 4)
+	n, err := io.ReadAtLeast(r, buf, 4)
 	switch {
-	case err == io.EOF || n < len(hdr):
-		return io.NopCloser(bytes.NewReader(hdr[:n])), nil
+	case err == io.EOF || n < len(buf):
+		return io.NopCloser(bytes.NewReader(buf[:n])), nil
 	case err != nil:
 		return nil, fmt.Errorf("zt.NewReader: error from underlying reader: %v", err)
 	}
 
 	var rc io.ReadCloser
 
-	// Prefill a reader with the header containing the magic number
-	pfr := newPrefilledReader(r, hdr[:])
+	// Prefill a reader with the header containing the magic number.
+	pfr := newPrefilledReader(r, buf[:])
 	switch {
-	case bytes.Equal(hdr[:2], []byte(gzipHeader)):
+	case bytes.Equal(buf[:2], []byte(gzipHeader)):
 		r, err := gzip.NewReader(pfr)
 		if err != nil {
 			return nil, fmt.Errorf("zt.NewReader: error from underlying gzip reader: %v", err)
 		}
 		rc = r
-	case bytes.Equal(hdr[:4], []byte(zstdHeader)):
+	case bytes.Equal(buf[:4], []byte(zstdHeader)):
 		r, err := zstd.NewReader(pfr)
 		if err != nil {
 			return nil, fmt.Errorf("zt.NewReader: error from underlying zstd reader: %v", err)
@@ -72,23 +74,19 @@ func newPrefilledReader(r io.Reader, hdr []byte) *prefilledReader {
 	}
 }
 
-func (r *prefilledReader) readFromHdr(p []byte) (n int, err error) {
-	n = copy(p, r.hdr[r.off:])
-	r.off += n
-	switch {
-	case r.off < len(r.hdr):
-		return n, nil
-	case r.off == len(r.hdr):
-		// Now that the whole header has been read, forward next calls to r.
-		r.hdr = nil
-		return n, nil
-	}
-	panic(fmt.Sprintf("unexpected n=%d r.off=%d len(header)=%d", n, r.off, len(r.hdr)))
-}
-
 func (r *prefilledReader) Read(p []byte) (n int, err error) {
 	if r.hdr != nil {
-		return r.readFromHdr(p)
+		n = copy(p, r.hdr[r.off:])
+		r.off += n
+		switch {
+		case r.off < len(r.hdr):
+			return n, nil
+		case r.off == len(r.hdr):
+			// Now that the header has been read, forward next calls to r.
+			r.hdr = nil
+			return n, nil
+		}
+		panic(fmt.Sprintf("unexpected n=%d r.off=%d len(header)=%d", n, r.off, len(r.hdr)))
 	}
 
 	return r.r.Read(p)
