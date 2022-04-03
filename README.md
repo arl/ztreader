@@ -1,25 +1,27 @@
 # zt the zip-transparent Reader
 
-```go
-// Package zt provides a Reader that help to transparently handle an incomping
-// bytes stream, whether it's compressed (by decompressing it on the fly), or
-// uncompressed, in which case it's forwarded as-i.
-```
+Package *zt* provides types and functions that allow to transparently handle an
+incoming stream of bytes, whether it's compressed – by decompressing it on the
+fly – or uncompressed, in which case the bytes are simply forwarded as-is.
 
-This is especially useful for command line utilities for example, when you want
-to transparently deal with data coming from standard input, whether it is:
-  - uncompressed
-  - compressed in zstandard
-  - compressed in gzip
+One example of use is for CLI programs that wants to support reading compressed
+data from standard input. By using *zt* your program can transparently read
+compressed and uncompressed data.
+
+Currently supported compression algorithms are:
+  - zstandard
+  - gzip
 
 
-Example of use: a transparent decompressor.
+Example program: a transparent decompressor.
 
 ```go
 package main
 
 import (
-    ...
+	"io"
+	"os"
+
 	"github.com/arl/zt"
 )
 
@@ -27,11 +29,11 @@ func main() {
 	r, err := zt.NewReader(os.Stdin)
 	if err != nil { /* handle error */ }
 
-	n, err := io.Copy(os.Stdout, r)
+	_, err = io.Copy(os.Stdout, r)
 	if err != nil { /* handle error */ }
 }
 ```
 
-    go run main.go < /some/file.gz
-    go run main.go < /some/file.zst
-    go run main.go < /some/file
+go run main.go < /some/file.gz
+go run main.go < /some/file.zst
+go run main.go < /some/file
