@@ -9,8 +9,9 @@ data from standard input. By using *zt* your program can transparently read
 compressed and uncompressed data.
 
 Currently supported compression algorithms are:
-  - zstandard
-  - gzip
+  - [Zstandard](https://github.com/facebook/zstd)
+  - [Gzip](https://www.gzip.org/)
+  - [Bzip2](https://en.wikipedia.org/wiki/Bzip2)
 
 
 Example program: a transparent decompressor.

@@ -2,18 +2,16 @@ package zt
 
 import (
 	"bytes"
+	"compress/bzip2"
+	"compress/gzip"
 	"fmt"
 	"io"
 
-	"github.com/klauspost/compress/gzip"
 	"github.com/klauspost/compress/zstd"
 )
 
-const (
-	// Magic numbers for the supported compressors.
-	gzipHeader = "\x1f\x8b"
-	zstdHeader = "\x28\xb5\x2f\xfd"
-)
+// Minimum number of bytes required for compression detection.
+const minBytes = 4
 
 // NewReader returns an io.ReadCloser that reads from r, either decoding the
 // compressed stream (in case the algorithm used to compress it is both
@@ -26,8 +24,8 @@ const (
 // trick it into thinking a stream of bytes contains zstd or gzip compressed
 // data, while in fact it's not.
 func NewReader(r io.Reader) (io.ReadCloser, error) {
-	buf := make([]byte, 4)
-	n, err := io.ReadAtLeast(r, buf, 4)
+	buf := make([]byte, minBytes)
+	n, err := io.ReadAtLeast(r, buf, minBytes)
 	switch {
 	case err == io.EOF || n < len(buf):
 		return io.NopCloser(bytes.NewReader(buf[:n])), nil
@@ -35,43 +33,80 @@ func NewReader(r io.Reader) (io.ReadCloser, error) {
 		return nil, fmt.Errorf("zt.NewReader: error from underlying reader: %v", err)
 	}
 
-	var rc io.ReadCloser
+	return newReader(r, buf)
+}
 
-	// Prefill a reader with the header containing the magic number.
-	pfr := newPrefilledReader(r, buf[:])
-	switch {
-	case bytes.Equal(buf[:2], []byte(gzipHeader)):
-		r, err := gzip.NewReader(pfr)
+func newReader(r io.Reader, buf []byte) (rc io.ReadCloser, err error) {
+	comp := detectCompression(buf)
+
+	// Create a reader prefilled with the header we've already had to read in
+	// order to detect compression.
+	r = &prefilledReader{
+		r:   r,
+		hdr: buf,
+	}
+
+	switch comp {
+	case gzipCompression:
+		// This already returns a ReadCloser.
+		rc, err = gzip.NewReader(r)
 		if err != nil {
 			return nil, fmt.Errorf("zt.NewReader: error from underlying gzip reader: %v", err)
 		}
-		rc = r
-	case bytes.Equal(buf[:4], []byte(zstdHeader)):
-		r, err := zstd.NewReader(pfr)
+	case zstdCompression:
+		zr, err := zstd.NewReader(r)
 		if err != nil {
 			return nil, fmt.Errorf("zt.NewReader: error from underlying zstd reader: %v", err)
 		}
-		rc = newReadCloser(r, func() error { r.Close(); return nil })
-	default:
-		rc = io.NopCloser(pfr)
+		// zr is not a ReadCloser since zr.Close doesn't return an error, so we
+		// make an actual ReadCloser out of it.
+		rc = newReadCloser(zr, func() error { zr.Close(); return nil })
+	case bzip2Compression:
+		// bzip2.NewReader returns a simple Reader.
+		rc = io.NopCloser(bzip2.NewReader(r))
+	case noCompression:
+		rc = io.NopCloser(r)
 	}
 
 	return rc, nil
+}
+
+type compressionType int
+
+const (
+	noCompression compressionType = iota
+	zstdCompression
+	gzipCompression
+	bzip2Compression
+)
+
+func detectCompression(buf []byte) compressionType {
+	const (
+		gzipMagic  = "\x1f\x8b"
+		zstdMagic  = "\x28\xb5\x2f\xfd"
+		bzip2Magic = "BZh"
+	)
+
+	if bytes.Equal(buf[:2], []byte(gzipMagic)) {
+		return gzipCompression
+	}
+	if bytes.Equal(buf[:4], []byte(zstdMagic)) {
+		return zstdCompression
+	}
+	if bytes.Equal(buf[:3], []byte(bzip2Magic)) {
+		// Check compression level
+		if buf[3] >= '1' && buf[3] <= '9' {
+			return bzip2Compression
+		}
+	}
+
+	return noCompression
 }
 
 type prefilledReader struct {
 	r   io.Reader
 	hdr []byte
 	off int // track offset for next read on 'hdr'
-}
-
-// newPrefilledReader returns an io.Reader that first reads the provided header,
-// after what successive calls to Read are forwarded to r.
-func newPrefilledReader(r io.Reader, hdr []byte) *prefilledReader {
-	return &prefilledReader{
-		r:   r,
-		hdr: hdr,
-	}
 }
 
 func (r *prefilledReader) Read(p []byte) (n int, err error) {
