@@ -1,21 +1,21 @@
 # *zt*: the transparent `io.Reader` for compressed data
 
-Package *zt* provides types and functions that allow to transparently handle an
-incoming stream of bytes, whether it's compressed – by decompressing it on the
-fly – or uncompressed, in which case the bytes are simply forwarded as-is.
+Package *zt* provides a type implementing the `io.ReadCloser` interface,
+that allows to transparently handle an incoming stream of bytes, whether
+it's compressed – by decompressing it on the fly – or uncompressed, in
+which case the bytes are simply forwarded as-is.
 
-One example of use is for CLI programs that wants to support reading compressed
-data from standard input. By using *zt* your program can transparently read
-compressed and uncompressed data.
-
-Currently supported compression algorithms are:
+Supported compression algorithms are:
   - [Zstandard](https://github.com/facebook/zstd)
   - [Gzip](https://www.gzip.org/)
   - [Bzip2](https://en.wikipedia.org/wiki/Bzip2)
   - [zlib](https://www.zlib.net/)
 
+One example of use is for CLI programs that transparently support reading from
+standard input data, whether it's compressed or not, and without requiring the
+user to specify the compression algorithm.
 
-Example program: a transparent decompressor.
+#### Example, a transparent decompressor.
 
 ```go
 package main
@@ -30,6 +30,7 @@ import (
 func main() {
 	r, err := zt.NewReader(os.Stdin)
 	if err != nil { /* handle error */ }
+	defer r.Close()
 
 	_, err = io.Copy(os.Stdout, r)
 	if err != nil { /* handle error */ }
