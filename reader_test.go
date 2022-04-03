@@ -20,6 +20,9 @@ var (
 
 	//go:embed testdata/lorem.txt.golden.zst
 	loremZstd []byte
+
+	//go:embed testdata/lorem.txt.golden.bz2
+	loremBzip2 []byte
 )
 
 func testReader(r io.Reader) func(t *testing.T) {
@@ -54,6 +57,7 @@ func testReaders(newReader func([]byte) io.Reader) func(t *testing.T) {
 		t.Run("uncompressed", testReader(newReader(lorem)))
 		t.Run("gzip", testReader(newReader(loremGzip)))
 		t.Run("zstd", testReader(newReader(loremZstd)))
+		t.Run("bzip2", testReader(newReader(loremBzip2)))
 	}
 }
 
