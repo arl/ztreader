@@ -12,6 +12,7 @@ Currently supported compression algorithms are:
   - [Zstandard](https://github.com/facebook/zstd)
   - [Gzip](https://www.gzip.org/)
   - [Bzip2](https://en.wikipedia.org/wiki/Bzip2)
+  - [zlib](https://www.zlib.net/)
 
 
 Example program: a transparent decompressor.
@@ -35,6 +36,10 @@ func main() {
 }
 ```
 
-go run main.go < /some/file.gz
-go run main.go < /some/file.zst
-go run main.go < /some/file
+```sh
+go run main.go < /some/file.gz  # decompress gzip-compressed file to stdout
+go run main.go < /some/file.zst # decompress zstandard-compressed file to stdout
+go run main.go < /some/file.bz2 # decompress bzip2-compressed file to stdout
+go run main.go < /some/file.zz  # decompress zlib-compressed file to stdout
+go run main.go < /some/file     # print non-compressed file to stdout
+```
