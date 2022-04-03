@@ -3,10 +3,12 @@ package zt
 import (
 	"bytes"
 	"compress/bzip2"
-	"compress/gzip"
 	"fmt"
 	"io"
+	"strconv"
 
+	"github.com/klauspost/compress/gzip"
+	"github.com/klauspost/compress/zlib"
 	"github.com/klauspost/compress/zstd"
 )
 
@@ -48,7 +50,7 @@ func newReader(r io.Reader, buf []byte) (rc io.ReadCloser, err error) {
 
 	switch comp {
 	case gzipCompression:
-		// This already returns a ReadCloser.
+		// This returns a ReadCloser.
 		rc, err = gzip.NewReader(r)
 		if err != nil {
 			return nil, fmt.Errorf("zt.NewReader: error from underlying gzip reader: %v", err)
@@ -64,8 +66,16 @@ func newReader(r io.Reader, buf []byte) (rc io.ReadCloser, err error) {
 	case bzip2Compression:
 		// bzip2.NewReader returns a simple Reader.
 		rc = io.NopCloser(bzip2.NewReader(r))
+	case zlibCompression:
+		// This returns a ReadCloser.
+		rc, err = zlib.NewReader(r)
+		if err != nil {
+			return nil, fmt.Errorf("zt.NewReader: error from underlying zlib reader: %v", err)
+		}
 	case noCompression:
 		rc = io.NopCloser(r)
+	default:
+		panic("unexpected compression type: " + strconv.Itoa(int(comp)))
 	}
 
 	return rc, nil
@@ -78,6 +88,7 @@ const (
 	zstdCompression
 	gzipCompression
 	bzip2Compression
+	zlibCompression
 )
 
 func detectCompression(buf []byte) compressionType {
@@ -85,6 +96,7 @@ func detectCompression(buf []byte) compressionType {
 		gzipMagic  = "\x1f\x8b"
 		zstdMagic  = "\x28\xb5\x2f\xfd"
 		bzip2Magic = "BZh"
+		zlibMagic  = 0x78
 	)
 
 	if bytes.Equal(buf[:2], []byte(gzipMagic)) {
@@ -97,6 +109,12 @@ func detectCompression(buf []byte) compressionType {
 		// Check compression level
 		if buf[3] >= '1' && buf[3] <= '9' {
 			return bzip2Compression
+		}
+	}
+	if buf[0] == zlibMagic {
+		switch buf[1] {
+		case 0x01, 0x5E, 0x9C, 0xDA:
+			return zlibCompression
 		}
 	}
 
