@@ -1,4 +1,4 @@
-# zt the zip-transparent Reader
+# *zt*: the transparent `io.Reader` for compressed data
 
 Package *zt* provides types and functions that allow to transparently handle an
 incoming stream of bytes, whether it's compressed – by decompressing it on the
