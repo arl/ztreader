@@ -1,19 +1,16 @@
 # *zt*: the transparent `io.Reader` for compressed data
 
 Package *zt* provides a type implementing the `io.ReadCloser` interface,
-that allows to transparently handle an incoming stream of bytes, whether
-it's compressed – by decompressing it on the fly – or uncompressed, in
-which case the bytes are simply forwarded as-is.
+that transparently uncompresses a stream of compressed bytes. *zt* detects
+the compression algorithm from the stream header, creates that appropriate
+decompressor. In case the incoming data is not compressed, or if the compression
+algorithm is unknown or unsupported, bytes are simply forwarded as-is.
 
 Supported compression algorithms are:
   - [Zstandard](https://github.com/facebook/zstd)
   - [Gzip](https://www.gzip.org/)
   - [Bzip2](https://en.wikipedia.org/wiki/Bzip2)
   - [zlib](https://www.zlib.net/)
-
-One example of use is for CLI programs that transparently support reading from
-standard input data, whether it's compressed or not, and without requiring the
-user to specify the compression algorithm.
 
 #### Example, a transparent decompressor.
 
